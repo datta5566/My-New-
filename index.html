@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0e14">
+<title>DK Codex Studio</title>
+<style>
+:root{color-scheme:dark;--bg:#090c12;--panel:#111722;--panel2:#171f2b;--line:#273244;--txt:#eef2fa;--muted:#9aa8bc;--red:#f04452;--green:#32c48d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:16px system-ui,-apple-system,Segoe UI,sans-serif}
+header{position:sticky;top:0;z-index:5;background:#0d121a;border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{display:flex;align-items:center;gap:12px;font-weight:750;font-size:20px}.logo{width:46px;height:46px;border-radius:15px;background:linear-gradient(135deg,#ff5260,#a91f35);display:grid;place-items:center;font-weight:900}
+button,select,input,textarea{font:inherit}button{border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:13px;padding:11px 15px;cursor:pointer}button.primary{background:var(--red);border-color:var(--red);font-weight:700}button:disabled{opacity:.5}
+main{max-width:900px;margin:auto;padding:16px;display:grid;gap:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:20px;overflow:hidden}.card h2{font-size:18px;margin:0;padding:17px 18px;border-bottom:1px solid var(--line)}.inside{padding:16px}
+label{display:block;color:var(--muted);margin:0 0 8px}input,select,textarea{width:100%;background:#0b1018;color:var(--txt);border:1px solid var(--line);border-radius:12px;padding:13px;outline:none}input:focus,select:focus,textarea:focus{border-color:#647b9d}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row>*{flex:1;min-width:130px}.hint{color:var(--muted);line-height:1.55;font-size:14px;margin:12px 0}.status{padding:12px;border-radius:12px;background:#0b1018;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
+#messages{display:grid;gap:12px;min-height:170px;max-height:52vh;overflow:auto}.msg{padding:13px 14px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55}.user{background:#202c3c;margin-left:8%}.assistant{background:#0b1018;border:1px solid var(--line);margin-right:4%}.role{font-size:12px;color:var(--muted);margin-bottom:5px}
+textarea#prompt{min-height:100px;resize:vertical}.small{font-size:12px;color:var(--muted)}.danger{color:#ff8b94}.good{color:var(--green)}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:10px 0 24px}
+@media(max-width:520px){header{padding:10px}.brand{font-size:17px}.logo{width:42px;height:42px}main{padding:12px}.row button{width:100%}}
+</style>
+</head>
+<body>
+<header><div class="brand"><div class="logo">DK</div><span>Codex Studio</span></div><button id="newChat">＋ New chat</button></header>
+<main>
+<section class="card">
+<h2>🔑 API Key Settings</h2>
+<div class="inside">
+<label for="model">Model</label>
+<select id="model"><option value="gpt-5.5">gpt-5.5</option><option value="gpt-4.1">gpt-4.1</option></select>
+<div style="height:12px"></div>
+<label for="apiKey">OpenAI API Key</label>
+<div class="row"><input id="apiKey" type="password" placeholder="sk-... या अपनी API key डालें" autocomplete="off"><button id="toggle">Show</button></div>
+<p class="hint">Key केवल इस मोबाइल के local Node.js backend को भेजी जाती है और प्रोजेक्ट के .env फाइल में सेव होती है। इसे HTML या browser storage में नहीं रखा जाता। ऐप को public internet पर expose न करें।</p>
+<div class="row"><button class="primary" id="save">Save / Update</button><button id="remove">Remove</button><button id="check">Check server</button></div>
+<p class="hint" id="keyStatus">Backend स्थिति जाँची जा रही है…</p>
+<div class="status" id="output">Server output यहाँ दिखेगा।</div>
+</div>
+</section>
+<section class="card">
+<h2>💬 Chat</h2>
+<div class="inside">
+<div id="messages"><div class="msg assistant"><div class="role">DK CODEX</div>नमस्ते! API Key सेव करने के बाद अपना सवाल लिखें।</div></div>
+<div style="height:12px"></div>
+<textarea id="prompt" placeholder="अपना सवाल या coding task लिखें…"></textarea>
+<div style="height:10px"></div>
+<div class="row"><button class="primary" id="send">Send message</button><button id="clear">Clear chat</button></div>
+<p class="small">यह OpenAI API आधारित chat assistant है। API usage पर आपके OpenAI account के अनुसार शुल्क लग सकता है।</p>
+</div>
+</section>
+<footer>DK Codex Studio · Android local mode · API key आपके डिवाइस पर</footer>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let history = [];
+function showOutput(s){$("output").textContent=s}
+function addMessage(role, content){
+ const el=document.createElement("div"); el.className="msg "+role;
+ const tag=document.createElement("div");tag.className="role";tag.textContent=role==="user"?"YOU":"CODEX AI";
+ const body=document.createElement("div");body.textContent=content;
+ el.append(tag,body);$("messages").append(el);$("messages").scrollTop=$("messages").scrollHeight;
+}
+async function api(url, body){
+ const r=await fetch(url,{method:body?"POST":"GET",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined});
+ const data=await r.json().catch(()=>({error:"Server से सही response नहीं मिला"}));
+ if(!r.ok) throw new Error(data.error||"Request failed");return data;
+}
+async function check(){
+ try{
+   const d=await api("/api/health");
+   $("keyStatus").textContent=d.keyConfigured?"Local backend चालू है · API Key सेव है":"Local backend चालू है · API Key अभी सेव नहीं है";
+   $("keyStatus").className="hint "+(d.keyConfigured?"good":"");
+   $("model").value=d.model||"gpt-5.5";
+   showOutput("Local server OK. OpenAI API की असली जाँच एक छोटा test request भेजकर होगी।");
+ } catch(e){
+   $("keyStatus").textContent="Backend से कनेक्शन नहीं हुआ। Termux में node server.js चालू करें।";
+   $("keyStatus").className="hint danger";showOutput("Connection error: "+e.message);
+ }
+}
+$("toggle").onclick=()=>{const x=$("apiKey");x.type=x.type==="password"?"text":"password";$("toggle").textContent=x.type==="password"?"Show":"Hide";};
+$("save").onclick=async()=>{try{const d=await api("/api/settings/key",{apiKey:$("apiKey").value});$("apiKey").value="";showOutput(d.message);await check();}catch(e){showOutput("Key save नहीं हुई: "+e.message);}};
+$("remove").onclick=async()=>{try{const d=await api("/api/settings/key",{apiKey:""});showOutput(d.message);await check();}catch(e){showOutput(e.message);}};
+$("check").onclick=check;
+$("send").onclick=async()=>{
+ const q=$("prompt").value.trim();if(!q)return;
+ $("prompt").value="";history.push({role:"user",content:q});addMessage("user",q);
+ $("send").disabled=true;$("send").textContent="Working…";
+ try{const d=await api("/api/chat",{model:$("model").value,messages:history});history.push({role:"assistant",content:d.text});addMessage("assistant",d.text);showOutput("उत्तर मिला · "+d.model);}
+ catch(e){addMessage("assistant","Error: "+e.message);showOutput("Chat error: "+e.message);}
+ finally{$("send").disabled=false;$("send").textContent="Send message";}
+};
+$("prompt").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("send").click();}});
+function reset(){history=[];$("messages").innerHTML='<div class="msg assistant"><div class="role">DK CODEX</div>नई चैट शुरू हुई। अपना सवाल लिखें।</div>';}
+$("newChat").onclick=reset;$("clear").onclick=reset;
+check();
+</script>
+</body>
+</html>
